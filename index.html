@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Rate Compass</title>
+<style>
+  :root {
+    --bg: #0b0e17;
+    --surface: #131724;
+    --surface2: #1a2035;
+    --border: #252d4a;
+    --text: #e4e8f1;
+    --text2: #8892b0;
+    --accent: #00d4aa;
+    --accent2: #0ea5e9;
+    --green: #10b981;
+    --red: #ef4444;
+    --gold: #f59e0b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  .header {
+    text-align: center;
+    padding: 30px 0 20px;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .header p { color: var(--text2); margin-top: 6px; font-size: 14px; }
+  .header .sub {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 8px;
+  }
+  .header .sub span { 
+    display: inline-block;
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin: 2px 3px;
+    font-size: 11px;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 60px 1fr;
+    gap: 16px;
+    align-items: start;
+    margin: 24px 0;
+  }
+  @media (max-width: 768px) {
+    .panels { grid-template-columns: 1fr; gap: 12px; }
+    .swap-arrow { transform: rotate(90deg); }
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  .amount-wrap { position: relative; margin-bottom: 12px; }
+  .amount-wrap input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 600;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .amount-wrap input:focus { border-color: var(--accent); }
+  .amount-wrap .max-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--border);
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .amount-wrap .max-btn:hover { background: var(--accent); color: #000; }
+
+  .swap-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    font-size: 28px;
+    color: var(--text2);
+    cursor: pointer;
+    padding: 12px 0;
+    transition: all 0.2s;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .swap-arrow:hover { color: var(--accent); border-color: var(--accent); background: #0a2e2a; }
+
+  .search-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    margin-bottom: 10px;
+    transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text2); }
+
+  .token-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    gap: 6px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .token-grid::-webkit-scrollbar { width: 4px; }
+  .token-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .token-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 2px 6px;
+    border-radius: 10px;
+    background: var(--surface2);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    min-height: 64px;
+    user-select: none;
+  }
+  .token-tile:hover { border-color: var(--text2); background: #1e2640; }
+  .token-tile.selected { border-color: var(--accent); background: #0a2e2a; }
+  .token-tile.dest-selected { border-color: var(--accent2); background: #0a1e3a; }
+  .token-tile.disabled { opacity: 0.3; pointer-events: none; cursor: default; }
+  .token-tile .icon-wrap {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    overflow: hidden;
+  }
+  .token-tile .icon-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .token-tile .symbol {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .token-tile .chain-badge {
+    font-size: 7px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--text2);
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    line-height: 1.4;
+  }
+  .token-tile .chain-badge.hidden { display: none; }
+
+  .results { display: none; margin-top: 20px; }
+  .results.visible { display: block; }
+
+  .pair-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .pair-summary .from-to {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .pair-summary .from-to .arrow { color: var(--text2); margin: 0 14px; }
+  .pair-summary .market-price {
+    font-size: 14px;
+    color: var(--text2);
+  }
+  .pair-summary .market-price strong { color: var(--accent); }
+
+  .rate-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.2s;
+  }
+  .rate-card.best {
+    border-color: var(--gold);
+    background: #1e1808;
+  }
+  .rate-card .src-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #fff;
+  }
+  .rate-card .name-col { 
+    min-width: 110px;
+  }
+  .rate-card .name-col .name {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .rate-card .name-col .status {
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .rate-card .rate-col {
+    flex: 1;
+    text-align: center;
+  }
+  .rate-card .rate-col .value {
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  }
+  .rate-card .rate-col .perp {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+  .rate-card .detail-col {
+    font-size: 11px;
+    color: var(--text2);
+    text-align: right;
+    max-width: 160px;
+    line-height: 1.4;
+  }
+  .rate-card .spread-col {
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 68px;
+    text-align: right;
+  }
+  .rate-card .spread-col.bad { color: var(--red); }
+  .rate-card .spread-col.good { color: var(--green); }
+  .rate-card .spread-col.neutral { color: var(--text2); }
+  .rate-card .badge-best {
+    background: var(--gold);
+    color: #000;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+    white-space: nowrap;
+  }
+  .rate-card.nodata { opacity: 0.5; }
+
+  .best-overall {
+    background: linear-gradient(135deg, #1e1808, #1a2010);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin-top: 12px;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .best-overall strong { color: var(--gold); }
+
+  .loading-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text2);
+  }
+  .loading-state .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-state {
+    text-align: center;
+    padding: 16px;
+    color: var(--red);
+    background: #2a1015;
+    border-radius: 10px;
+    border: 1px solid #3a1520;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  .refresh-bar {
+    text-align: center;
+    margin-top: 16px;
+  }
+  .refresh-btn {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 20px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .refresh-btn.visible { display: inline-flex; }
+
+  .hint {
+    text-align: center;
+    color: var(--text2);
+    font-size: 14px;
+    padding: 50px 20px;
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px dashed var(--border);
+  }
+
+  /* legend */
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .legend-item .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  @media (max-width: 768px) {
+    .token-grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); max-height: 240px; }
+    .rate-card { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+    .rate-card .name-col { min-width: 80px; }
+    .rate-card .rate-col .value { font-size: 14px; }
+    .rate-card .spread-col { min-width: 58px; font-size: 12px; }
+    .rate-card .detail-col { max-width: 120px; }
+    .pair-summary .from-to { font-size: 18px; }
+    .panels { grid-template-columns: 1fr; gap: 10px; }
+    .swap-arrow { transform: rotate(90deg); width: 40px; height: 40px; font-size: 20px; margin: -4px auto; }
+    .header h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>⚡ Rate Compass</h1>
+    <p>Compare exchange rates across services vs. market — find the best deal</p>
+    <div class="sub">
+      <span>CoinGecko</span> <span>ChangeNOW</span> <span>FixedFloat</span> <span>BestChange</span>
+    </div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-title">You Send</div>
+      <div class="amount-wrap">
+        <input type="number" id="amountInput" value="1" min="0.00000001" step="any" placeholder="Amount">
+      </div>
+      <input type="text" class="search-input" id="sourceSearch" placeholder="Search tokens..." oninput="filterTokens('source')">
+      <div class="token-grid" id="sourceGrid"></div>
+    </div>
+
+    <div class="swap-arrow" id="swapBtn" onclick="swapTokens()" title="Swap source/destination">⇄</div>
+
+    <div class="panel">
+      <div class="panel-title">You Get</div>
+      <div style="height:52px"></div>
+      <input type="text" class="search-input" id="destSearch" placeholder="Search tokens..." oninput="filterTokens('dest')">
+      <div class="token-grid" id="destGrid"></div>
+    </div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="pair-summary" id="pairSummary">
+      <div class="from-to">
+        <span id="pairFrom">—</span>
+        <span class="arrow">→</span>
+        <span id="pairTo">—</span>
+      </div>
+      <div class="market-price">
+        Market (CoinGecko): <strong id="marketRate">—</strong>
+      </div>
+    </div>
+
+    <div id="ratesContainer"></div>
+    <div id="bestOverall" class="best-overall" style="display:none"></div>
+
+    <div class="refresh-bar">
+      <button class="refresh-btn" id="refreshBtn" onclick="fetchAllRates()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="hint" id="hint">Select a source (left grid) and destination (right grid) token to compare rates</div>
+  <div id="loadingArea"></div>
+</div>
+
+<script>
+// ============================================================
+// TOKEN DATABASE
+// CoinGecko ID / FixedFloat code / ChangeNOW ticker / BestChange slug
+// ============================================================
+const TOKENS = [
+  // ── Native majors ──
+  { symbol:'BTC',   name:'Bitcoin',              cgId:'bitcoin',            ff:'BTC',      cn:'btc',    bc:'bitcoin' },
+  { symbol:'ETH',   name:'Ethereum',             cgId:'ethereum',           ff:'ETH',      cn:'eth',    bc:'ethereum' },
+  { symbol:'SOL',   name:'Solana',               cgId:'solana',             ff:'SOL',      cn:'sol',    bc:'solana' },
+  { symbol:'BNB',   name:'BNB',                  cgId:'binancecoin',        ff:'BSC',      cn:'bnbbsc', bc:'bnb' },
+  { symbol:'XRP',   name:'XRP',                  cgId:'ripple',             ff:'XRP',      cn:'xrp',    bc:'ripple' },
+  { symbol:'ADA',   name:'Cardano',              cgId:'cardano',            ff:'ADA',      cn:'ada',    bc:'cardano' },
+  { symbol:'DOGE',  name:'Dogecoin',             cgId:'dogecoin',           ff:'DOGE',     cn:'doge',   bc:'dogecoin' },
+  { symbol:'TRX',   name:'TRON',                 cgId:'tron',               ff:'TRX',      cn:'trx',    bc:'tron' },
+  { symbol:'AVAX',  name:'Avalanche',            cgId:'avalanche-2',        ff:'AVAX',     cn:'avax',   bc:'avalanche' },
+  { symbol:'DOT',   name:'Polkadot',             cgId:'polkadot',           ff:'DOTAH',    cn:'dot',    bc:'polkadot' },
+  { symbol:'MATIC', name:'Polygon',              cgId:'matic-network',      ff:'MATIC',    cn:'matic',  bc:'matic' },
+  { symbol:'LINK',  name:'Chainlink',            cgId:'chainlink',          ff:'LINK',     cn:'link',   bc:'chainlink' },
+  { symbol:'LTC',   name:'Litecoin',             cgId:'litecoin',           ff:'LTC',      cn:'ltc',    bc:'litecoin' },
+  { symbol:'BCH',   name:'Bitcoin Cash',         cgId:'bitcoin-cash',       ff:'BCH',      cn:'bch',    bc:'bitcoin-cash' },
+  { symbol:'XMR',   name:'Monero',               cgId:'monero',             ff:'XMR',      cn:'xmr',    bc:'monero' },
+  { symbol:'ATOM',  name:'Cosmos',               cgId:'cosmos',             ff:'ATOM',     cn:'atom',   bc:'cosmos' },
+  { symbol:'TON',   name:'Toncoin',              cgId:'the-open-network',   ff:'TON',      cn:'toncoin',bc:'ton' },
+  { symbol:'APT',   name:'Aptos',                cgId:'aptos',              ff:'APT',      cn:'apt',    bc:'aptos' },
+  { symbol:'SUI',   name:'Sui',                  cgId:'sui',                ff:'SUI',      cn:'sui',    bc:'sui' },
+  { symbol:'NEAR',  name:'NEAR Protocol',        cgId:'near',               ff:'NEAR',     cn:'near',   bc:'near' },
+  { symbol:'ARB',   name:'Arbitrum',             cgId:'arbitrum',           ff:'ARB',      cn:'arb',    bc:'arbitrum' },
+  { symbol:'OP',    name:'Optimism',             cgId:'optimism',           ff:'OP',       cn:'op',     bc:'optimism' },
+  { symbol:'INJ',   name:'Injective',            cgId:'injective-protocol', ff:'INJ',      cn:'inj',    bc:'injective' },
+  { symbol:'RUNE',  name:'THORChain',            cgId:'thorchain',          ff:'RUNE',     cn:'rune',   bc:'thorchain' },
+  { symbol:'ALGO',  name:'Algorand',             cgId:'algorand',           ff:'ALGO',     cn:'algo',   bc:'algorand' },
+  { symbol:'FTM',   name:'Fantom',               cgId:'fantom',             ff:'FTM',      cn:'ftm',    bc:'fantom' },
+  { symbol:'HBAR',  name:'Hedera',               cgId:'hedera-hashgraph',   ff:'HBAR',     cn:'hbar',   bc:'hedera' },
+  { symbol:'SAND',  name:'The Sandbox',          cgId:'the-sandbox',        ff:'SAND',     cn:'sand',   bc:'the-sandbox' },
+
+  // ── ETH chain variants ──
+  { symbol:'ETH',   name:'Ethereum (Arbitrum)',  cgId:'ethereum',  ff:'ETHARBITRUM', cn:'etharb',  bc:'ethereum-arbitrum',  chain:'ARB' },
+  { symbol:'ETH',   name:'Ethereum (Base)',      cgId:'ethereum',  ff:'ETHBASE',     cn:'ethbase', bc:'ethereum-base',      chain:'BASE' },
+  { symbol:'ETH',   name:'Ethereum (Optimism)',  cgId:'ethereum',  ff:'ETHOP',       cn:'ethop',   bc:'ethereum-optimism',  chain:'OP' },
+
+  // ── Stablecoins ──
+  { symbol:'USDT',  name:'Tether (ERC20)',   cgId:'tether',     ff:'USDT',    cn:'usdterc20', bc:'tether-erc20',   chain:'ERC20' },
+  { symbol:'USDT',  name:'Tether (TRC20)',   cgId:'tether',     ff:'USDT',    cn:'usdttrc20', bc:'tether-trc20',   chain:'TRC20' },
+  { symbol:'USDT',  name:'Tether (Solana)',  cgId:'tether',     ff:'USDT',    cn:'usdtsol',   bc:'tether-solana',  chain:'SOL' },
+  { symbol:'USDT',  name:'Tether (BSC)',     cgId:'tether',     ff:'USDT',    cn:'usdtbsc',   bc:'tether-bsc',     chain:'BSC' },
+  { symbol:'USDC',  name:'USD Coin (ERC20)', cgId:'usd-coin',   ff:'USDC',    cn:'usdc',      bc:'usd-coin-erc20', chain:'ERC20' },
+  { symbol:'USDC',  name:'USD Coin (Base)',  cgId:'usd-coin',   ff:'USDC',    cn:'usdcbase',  bc:'usd-coin-base',  chain:'BASE' },
+  { symbol:'USDC',  name:'USD Coin (Solana)',cgId:'usd-coin',   ff:'USDC',    cn:'usdcsol',   bc:'usd-coin-solana',chain:'SOL' },
+  { symbol:'DAI',   name:'Dai (ERC20)',      cgId:'dai',        ff:'DAI',     cn:'dai',       bc:'dai',            chain:'ERC20' },
+];
+
+// Pre-computed color palette for icon backgrounds (deterministic by symbol)
+function colorFor(sym) {
+  const colors = ['#f7931a','#627eea','#00d4aa','#f0b90b','#23292f','#0033ad','#c2a633','#e7053e','#e84142','#e6007a',
+                  '#8247e5','#2a5ada','#345d9d','#0d5630','#4c2a7a','#2e3148','#0088cc','#00b5ff','#00b09b','#00b5d9',
+                  '#2d3748','#ff0420','#4f46e5','#1a1a2e','#a74fff','#13b5ec','#000000','#00adee'];
+  let h = 0;
+  for (let i=0;i<sym.length;i++) h = ((h<<5)-h)+sym.charCodeAt(i);
+  return colors[Math.abs(h)%colors.length];
+}
+
+// ============================================================
+// STATE
+// ============================================================
+const state = { sourceToken: null, destToken: null, amount: 1, loading: false, skipNextUpdate: false };
+
+// ============================================================
+// CORS PROXY
+// ============================================================
+const CORS_PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+];
+
+async function proxiedFetch(url, idx = 0) {
+  if (idx >= CORS_PROXIES.length) throw new Error('CORS proxies exhausted');
+  const proxyUrl = CORS_PROXIES[idx](url);
+  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`Proxy ${idx} HTTP ${res.status}`);
+  return await res.text();
+}
+
+// ============================================================
+// UI
+// ============================================================
+function renderGrid(side) {
+  const grid = document.getElementById(side==='source'?'sourceGrid':'destGrid');
+  const search = document.getElementById(side==='source'?'sourceSearch':'destSearch');
+  const q = (search.value||'').toLowerCase().trim();
+  const isSrc = side==='source';
+  const sel = isSrc ? state.sourceToken : state.destToken;
+  const other = isSrc ? state.destToken : state.sourceToken;
+
+  const tokens = q ? TOKENS.filter(t =>
+    t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)
+  ) : TOKENS;
+
+  grid.innerHTML = tokens.map(t => {
+    const selected = sel && t.symbol===sel.symbol && (t.chain||null)===(sel.chain||null);
+    const disabled = other && t.symbol===other.symbol && (t.chain||null)===(other.chain||null);
+    return `<div class="token-tile ${selected?(isSrc?'selected':'dest-selected'):''} ${disabled?'disabled':''}"
+                onclick="${disabled?'':`pick('${side}','${t.cgId}','${t.symbol}','${t.name.replace(/'/g,"\\'")}','${t.ff}','${t.cn}','${t.bc}','${t.chain||''}')`}"
+                title="${t.name}">
+        <div class="icon-wrap" style="background:${colorFor(t.symbol)}">
+          <span>${t.symbol.startsWith('E')?'⟠':t.symbol.startsWith('B')?'₿':t.symbol.slice(0,2)}</span>
+        </div>
+        <span class="symbol">${t.symbol}</span>
+        <span class="chain-badge ${t.chain?'':'hidden'}">${t.chain||''}</span>
+      </div>`;
+  }).join('');
+}
+
+function pick(side, cgId, symbol, name, ff, cn, bc, chain) {
+  const t = { cgId, symbol, name, ff, cn, bc, chain: chain||null };
+  if (side==='source') {
+    if (state.destToken && matchToken(t,state.destToken)) return;
+    state.sourceToken = t;
+  } else {
+    if (state.sourceToken && matchToken(t,state.sourceToken)) return;
+    state.destToken = t;
+  }
+  renderGrid('source');
+  renderGrid('dest');
+  updateResults();
+}
+
+function matchToken(a,b) {
+  return a.symbol===b.symbol && (a.chain||null)===(b.chain||null);
+}
+
+function swapTokens() {
+  const s=state.sourceToken,d=state.destToken;
+  state.sourceToken=d; state.destToken=s;
+  renderGrid('source'); renderGrid('dest');
+  updateResults();
+}
+
+function filterTokens(side) { renderGrid(side); }
+
+// ============================================================
+// API FETCHERS
+// ============================================================
+async function getCG() {
+  const ids = [...new Set(TOKENS.map(t=>t.cgId))].join(',');
+  const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(`CoinGecko HTTP ${r.status}`);
+  return await r.json();
+}
+
+async function getFF() {
+  const xml = await proxiedFetch('https://ff.io/rates/float.xml');
+  const d = new DOMParser().parseFromString(xml,'text/xml');
+  const map = {};
+  d.querySelectorAll('item').forEach(item => {
+    const from = item.querySelector('from')?.textContent;
+    const to = item.querySelector('to')?.textContent;
+    const out = parseFloat(item.querySelector('out')?.textContent||'0');
+    if (from && to && out>0) {
+      const amt = parseFloat(item.querySelector('amount')?.textContent||'0');
+      const min = parseFloat((item.querySelector('minamount')?.textContent||'').replace(/[^\d.]/g,'')||'0');
+      const max = parseFloat((item.querySelector('maxamount')?.textContent||'').replace(/[^\d.]/g,'')||'0');
+      map[from+'_'+to] = { rate: out, reserve: amt, min, max };
+    }
+  });
+  return map;
+}
+
+async function getBC(fromSlug, toSlug) {
+  const html = await proxiedFetch(`https://www.bestchange.com/${fromSlug}-to-${toSlug}.html`);
+  const d = new DOMParser().parseFromString(html,'text/html');
+  let best = null, exchanger = null;
+  d.querySelectorAll('table tr').forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length<5) return;
+    const txt = cells[3]?.textContent?.trim()||'';
+    const m = txt.match(/^([\d.]+)/);
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (v && (!best || v>best)) { best=v; exchanger=cells[1]?.textContent?.trim(); }
+    }
+  });
+  return { rate: best, exchanger };
+}
+
+async function getCN(fromTicker, toTicker) {
+  // Try the exchange-amount endpoint (free, no key needed for some pairs)
+  const endpoints = [
+    `https://changenow.io/api/v1/exchange-amount/${fromTicker}_${toTicker}?amount=1`,
+    `https://changenow.io/api/v1/exchange-amount/${fromTicker}_${toTicker}`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (r.ok) {
+        const txt = await r.text();
+        if (txt.trim()) {
+          const j = JSON.parse(txt);
+          if (j && j.estimatedAmount) return j;
+        }
+      }
+    } catch(_) {}
+  }
+  // Fallback: try min-amount just to confirm the pair exists
+  try {
+    const r = await fetch(
+      `https://changenow.io/api/v1/min-amount/${fromTicker}_${toTicker}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const txt = await r.text();
+      const j = JSON.parse(txt);
+      if (j && j.minAmount) return { minAmount: j.minAmount };
+    }
+  } catch(_) {}
+  return null;
+}
+
+// ============================================================
+// MAIN
+// ============================================================
+async function fetchAllRates() {
+  if (!state.sourceToken || !state.destToken || state.loading) return;
+  state.loading = true;
+
+  // Global timeout: if we don't finish in 30s, release the loading state
+  let done = false;
+  setTimeout(() => { if (!done) { done = true; state.loading = false; document.getElementById('loadingArea').innerHTML = ''; } }, 28000);
+
+  const src = state.sourceToken, dst = state.destToken;
+  const amt = parseFloat(document.getElementById('amountInput').value) || 1;
+  state.amount = amt;
+
+  const loadingDiv = document.getElementById('loadingArea');
+  loadingDiv.innerHTML = `<div class="loading-state"><div class="spinner"></div>Fetching rates from all sources...</div>`;
+  document.getElementById('refreshBtn').classList.remove('visible');
+
+  const srcLabel = `${src.symbol}${src.chain?' ('+src.chain+')':''}`;
+  const dstLabel = `${dst.symbol}${dst.chain?' ('+dst.chain+')':''}`;
+  document.getElementById('pairFrom').textContent = `${amt} ${srcLabel}`;
+  document.getElementById('pairTo').textContent = dstLabel;
+
+  const results = [];
+  let marketRate = null, marketSrcPrice = null, marketDstPrice = null;
+
+  try {
+    // CoinGecko — market rate
+    const cgData = await getCG();
+    marketSrcPrice = cgData[src.cgId]?.usd;
+    marketDstPrice = cgData[dst.cgId]?.usd;
+    if (marketSrcPrice && marketDstPrice) {
+      marketRate = marketSrcPrice / marketDstPrice;
+      document.getElementById('marketRate').textContent =
+        `1 ${src.symbol} = ${marketRate.toFixed(6)} ${dst.symbol}  ($${marketSrcPrice.toFixed(marketSrcPrice>1?2:6)} → $${marketDstPrice.toFixed(marketDstPrice>1?6:8)})`;
+    } else {
+      document.getElementById('marketRate').textContent = 'Price data unavailable';
+    }
+
+    let bestSpread = Infinity, bestSource = null, bestTotal = null;
+
+    function addCard(source, icon, bg, rate, detail, nodata) {
+      const total = amt * rate;
+      const spread = (nodata || !marketRate || rate===0) ? null : (rate - marketRate) / marketRate * 100;
+      const isBest = !nodata && spread!==null && spread < bestSpread && spread < 0;
+      if (isBest) { bestSpread = spread; bestSource = source; bestTotal = total; }
+
+      results.push(`<div class="rate-card ${isBest?'best':''} ${nodata?'nodata':''}">
+        <div class="src-icon" style="background:${bg}">${icon}</div>
+        <div class="name-col">
+          <div class="name">${source}</div>
+          ${nodata?`<div class="status">${detail||'unavailable'}</div>`:''}
+        </div>
+        <div class="rate-col">
+          <div class="value">${nodata?'—':total.toFixed(6)+' '+dst.symbol}</div>
+          ${nodata?'':`<div class="perp">1 ${src.symbol} = ${rate.toFixed(6)} ${dst.symbol}</div>`}
+        </div>
+        ${nodata?'':`<div class="detail-col">${detail||''}</div>`}
+        <div class="spread-col ${spread===null?'neutral':spread<0?'good':'bad'}">
+          ${spread===null?'—':(spread<0?'':'+')+spread.toFixed(2)+'%'}
+        </div>
+        ${isBest?'<span class="badge-best">Best</span>':''}
+      </div>`);
+    }
+
+    // 1. ChangeNOW
+    try {
+      const cn = await getCN(src.cn, dst.cn);
+      if (cn && cn.estimatedAmount) {
+        addCard('ChangeNOW', 'CN', '#0ea5e9', parseFloat(cn.estimatedAmount)/amt, '');
+      } else {
+        addCard('ChangeNOW', 'CN', '#0ea5e9', 0, 'Needs API key', true);
+      }
+    } catch(e) { addCard('ChangeNOW', 'CN', '#0ea5e9', 0, e.message, true); }
+
+    // 2. FixedFloat
+    try {
+      const ff = await getFF();
+      const key = src.ff+'_'+dst.ff;
+      const d = ff[key];
+      if (d) {
+        let det = `Reserve: ${fmt(d.reserve)} ${src.symbol}`;
+        if (d.min>0) det += ` · Min: ${d.min}`;
+        if (d.max>0) det += ` · Max: ${d.max}`;
+        addCard('FixedFloat', 'FF', '#6366f1', d.rate, det);
+      } else {
+        addCard('FixedFloat', 'FF', '#6366f1', 0, 'Pair not listed', true);
+      }
+    } catch(e) { addCard('FixedFloat', 'FF', '#6366f1', 0, e.message, true); }
+
+    // 3. BestChange
+    try {
+      const bc = await getBC(src.bc, dst.bc);
+      if (bc.rate) {
+        addCard('BestChange', 'BC', '#f59e0b', bc.rate, bc.exchanger ? `via ${bc.exchanger}` : '');
+      } else {
+        addCard('BestChange', 'BC', '#f59e0b', 0, 'No offers', true);
+      }
+    } catch(e) { addCard('BestChange', 'BC', '#f59e0b', 0, e.message, true); }
+
+  } catch(e) {
+    results.push(`<div class="error-state">⚠️ ${e.message}</div>`);
+    done = true;
+  }
+
+  document.getElementById('ratesContainer').innerHTML = results.join('');
+
+  // Best overall
+  const be = document.getElementById('bestOverall');
+  if (bestSource && bestTotal!==null && bestSpread < 0) {
+    be.style.display = 'block';
+    be.innerHTML = `🏆 <strong>${bestSource}</strong> wins: get <strong>${bestTotal.toFixed(6)} ${dstLabel}</strong> — that's <strong>${Math.abs(bestSpread).toFixed(2)}% better</strong> than market for ${amt} ${srcLabel}`;
+  } else if (bestSource && bestTotal!==null && bestSpread < Infinity) {
+    be.style.display = 'block';
+    be.innerHTML = `📊 <strong>${bestSource}</strong> has the best available rate: <strong>${bestTotal.toFixed(6)} ${dstLabel}</strong> (${bestSpread.toFixed(2)}% above market)`;
+  } else {
+    be.style.display = 'none';
+  }
+
+  document.getElementById('results').classList.add('visible');
+  document.getElementById('hint').style.display = 'none';
+  document.getElementById('refreshBtn').classList.add('visible');
+  loadingDiv.innerHTML = '';
+  done = true;
+  state.loading = false;
+}
+
+function updateResults() {
+  if (!state.sourceToken || !state.destToken) return;
+  if (matchToken(state.sourceToken, state.destToken)) {
+    document.getElementById('hint').style.display = 'block';
+    document.getElementById('hint').textContent = '⚠️ Source and destination must be different';
+    document.getElementById('results').classList.remove('visible');
+    return;
+  }
+  fetchAllRates();
+}
+
+function fmt(n) {
+  if (!n||n===0) return '0';
+  if (n>=1e6) return (n/1e6).toFixed(2)+'M';
+  if (n>=1e3) return (n/1e3).toFixed(2)+'K';
+  return n.toFixed(2);
+}
+
+// Amount input
+document.getElementById('amountInput').addEventListener('input', () => {
+  if (state.sourceToken && state.destToken) {
+    state.amount = parseFloat(document.getElementById('amountInput').value) || 1;
+    fetchAllRates();
+  }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+renderGrid('source');
+renderGrid('dest');
+</script>
+</body>
+</html>
