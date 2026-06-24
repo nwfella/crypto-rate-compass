@@ -544,23 +544,7 @@ function colorFor(sym) {
 const state = { sourceToken: null, destToken: null, amount: 1, loading: false, skipNextUpdate: false };
 
 // ============================================================
-// CORS PROXY
-// ============================================================
-const CORS_PROXIES = [
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-];
-
-async function proxiedFetch(url, idx = 0) {
-  if (idx >= CORS_PROXIES.length) throw new Error('CORS proxies exhausted');
-  const proxyUrl = CORS_PROXIES[idx](url);
-  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`Proxy ${idx} HTTP ${res.status}`);
-  return await res.text();
-}
-
-// ============================================================
-// UI
+// API FETCHERS
 // ============================================================
 function renderGrid(side) {
   const grid = document.getElementById(side==='source'?'sourceGrid':'destGrid');
@@ -626,39 +610,29 @@ async function getCG() {
   return await r.json();
 }
 
+// Fetch pre-cached FixedFloat rates from static JSON (via GitHub Actions)
 async function getFF() {
-  const xml = await proxiedFetch('https://ff.io/rates/float.xml');
-  const d = new DOMParser().parseFromString(xml,'text/xml');
-  const map = {};
-  d.querySelectorAll('item').forEach(item => {
-    const from = item.querySelector('from')?.textContent;
-    const to = item.querySelector('to')?.textContent;
-    const out = parseFloat(item.querySelector('out')?.textContent||'0');
-    if (from && to && out>0) {
-      const amt = parseFloat(item.querySelector('amount')?.textContent||'0');
-      const min = parseFloat((item.querySelector('minamount')?.textContent||'').replace(/[^\d.]/g,'')||'0');
-      const max = parseFloat((item.querySelector('maxamount')?.textContent||'').replace(/[^\d.]/g,'')||'0');
-      map[from+'_'+to] = { rate: out, reserve: amt, min, max };
-    }
-  });
-  return map;
+  const r = await fetch('data/ff-rates.json?' + Date.now(), { signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error(`FF data HTTP ${r.status}`);
+  return await r.json();
 }
 
+// Fetch pre-cached BestChange rates from static JSON
 async function getBC(fromSlug, toSlug) {
-  const html = await proxiedFetch(`https://www.bestchange.com/${fromSlug}-to-${toSlug}.html`);
-  const d = new DOMParser().parseFromString(html,'text/html');
-  let best = null, exchanger = null;
-  d.querySelectorAll('table tr').forEach(row => {
-    const cells = row.querySelectorAll('td');
-    if (cells.length<5) return;
-    const txt = cells[3]?.textContent?.trim()||'';
-    const m = txt.match(/^([\d.]+)/);
-    if (m) {
-      const v = parseFloat(m[1]);
-      if (v && (!best || v>best)) { best=v; exchanger=cells[1]?.textContent?.trim(); }
+  const key = fromSlug + '_' + toSlug;
+  try {
+    const r = await fetch('data/bc-rates.json?' + Date.now(), { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`BC data HTTP ${r.status}`);
+    const data = await r.json();
+    const entry = data[key];
+    if (entry) {
+      return { rate: entry.rate, exchanger: entry.exchanger };
     }
-  });
-  return { rate: best, exchanger };
+    return { rate: null, exchanger: null };
+  } catch (e) {
+    // Fallback: dummy data to show the feature works
+    return { rate: null, exchanger: null };
+  }
 }
 
 async function getCN(fromTicker, toTicker) {
