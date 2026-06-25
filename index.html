@@ -197,13 +197,13 @@
     object-fit: cover;
   }
   .token-tile .icon-wrap .icon-fallback {
-    position: absolute;
-    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 12px;
     font-weight: 700;
+    width: 100%;
+    height: 100%;
   }
   .token-tile .icon-wrap .chain-badge {
     position: absolute;
@@ -551,6 +551,33 @@ function colorFor(sym) {
   return colors[Math.abs(h)%colors.length];
 }
 
+// ── Token icons: fetch from CoinGecko once ──
+const ICON_CACHE = {};
+let iconsLoaded = false;
+
+async function loadTokenIcons() {
+  if (iconsLoaded) return;
+  iconsLoaded = true;
+  const ids = [...new Set(TOKENS.map(t => t.cgId))];
+  try {
+    const r = await fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids.join(',')}&order=market_cap_desc&sparkline=false&price_change_percentage=`,
+      { signal: AbortSignal.timeout(12000) }
+    );
+    if (r.ok) {
+      const data = await r.json();
+      data.forEach(c => { if (c.image) ICON_CACHE[c.id] = c.image; });
+    }
+  } catch(e) { /* icons fall back to colored text */ }
+  renderGrid('source');
+  renderGrid('dest');
+}
+
+function iconSrc(t) {
+  if (ICON_CACHE[t.cgId]) return ICON_CACHE[t.cgId];
+  return null; // will use fallback
+}
+
 // ============================================================
 // STATE
 // ============================================================
@@ -578,11 +605,7 @@ function renderGrid(side) {
                 onclick="${disabled?'':`pick('${side}','${t.cgId}','${t.symbol}','${t.name.replace(/'/g,"\\'")}','${t.ff}','${t.cn}','${t.bc}','${t.chain||''}')`}"
                 title="${t.name}">
         <div class="icon-wrap" style="background:${colorFor(t.symbol)}">
-          <img src="https://cryptoicons.org/api/icon/${t.symbol.toLowerCase()}/32"
-               alt="${t.symbol}"
-               loading="lazy"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <span class="icon-fallback" style="display:none">${t.symbol.slice(0,2)}</span>
+          ${iconSrc(t) ? `<img src="${iconSrc(t)}" alt="${t.symbol}" loading="lazy">` : `<span class="icon-fallback">${t.symbol.slice(0,2)}</span>`}
           ${t.chain ? `<span class="chain-badge">${t.chain}</span>` : ''}
         </div>
         <span class="symbol">${t.symbol}</span>
@@ -846,6 +869,7 @@ document.getElementById('amountInput').addEventListener('input', () => {
 // ============================================================
 renderGrid('source');
 renderGrid('dest');
+loadTokenIcons(); // Fetch real token icons in background
 </script>
 </body>
 </html>
