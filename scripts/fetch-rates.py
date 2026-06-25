@@ -51,29 +51,57 @@ def fetch_bestchange():
     results = {}
 
     pairs = [
+        # BTC ↔ everyone
         ('bitcoin','ethereum'), ('ethereum','bitcoin'),
         ('bitcoin','tether-erc20'), ('tether-erc20','bitcoin'),
         ('bitcoin','usd-coin-erc20'), ('usd-coin-erc20','bitcoin'),
-        ('ethereum','tether-erc20'), ('tether-erc20','ethereum'),
-        ('ethereum','usd-coin-erc20'), ('usd-coin-erc20','ethereum'),
         ('bitcoin','solana'), ('solana','bitcoin'),
-        ('ethereum','solana'), ('solana','ethereum'),
         ('bitcoin','litecoin'), ('litecoin','bitcoin'),
         ('bitcoin','ripple'), ('ripple','bitcoin'),
         ('bitcoin','dogecoin'), ('dogecoin','bitcoin'),
         ('bitcoin','cardano'), ('cardano','bitcoin'),
-        ('ethereum','cardano'), ('cardano','ethereum'),
         ('bitcoin','tron'), ('tron','bitcoin'),
-        ('ethereum','litecoin'), ('litecoin','ethereum'),
         ('bitcoin','avalanche'), ('avalanche','bitcoin'),
         ('bitcoin','polkadot'), ('polkadot','bitcoin'),
-        ('ethereum','matic'), ('matic','ethereum'),
         ('bitcoin','chainlink'), ('chainlink','bitcoin'),
-        ('tether-erc20','usd-coin-erc20'),
         ('bitcoin','monero'), ('monero','bitcoin'),
         ('bitcoin','bitcoin-cash'), ('bitcoin-cash','bitcoin'),
         ('bitcoin','bnb'), ('bnb','bitcoin'),
         ('bitcoin','aptos'), ('aptos','bitcoin'),
+        ('bitcoin','sui'), ('sui','bitcoin'),
+        ('bitcoin','near'), ('near','bitcoin'),
+        ('bitcoin','arbitrum'), ('arbitrum','bitcoin'),
+        ('bitcoin','injective'), ('injective','bitcoin'),
+        ('bitcoin','algorand'), ('algorand','bitcoin'),
+        # ETH ↔ everyone
+        ('ethereum','tether-erc20'), ('tether-erc20','ethereum'),
+        ('ethereum','usd-coin-erc20'), ('usd-coin-erc20','ethereum'),
+        ('ethereum','solana'), ('solana','ethereum'),
+        ('ethereum','litecoin'), ('litecoin','ethereum'),
+        ('ethereum','cardano'), ('cardano','ethereum'),
+        ('ethereum','matic'), ('matic','ethereum'),
+        ('ethereum','avalanche'), ('avalanche','ethereum'),
+        ('ethereum','polkadot'), ('polkadot','ethereum'),
+        ('ethereum','chainlink'), ('chainlink','ethereum'),
+        ('ethereum','ripple'), ('ripple','ethereum'),
+        ('ethereum','dogecoin'), ('dogecoin','ethereum'),
+        ('ethereum','tron'), ('tron','ethereum'),
+        ('ethereum','bnb'), ('bnb','ethereum'),
+        ('ethereum','aptos'), ('aptos','ethereum'),
+        ('ethereum','monero'), ('monero','ethereum'),
+        ('ethereum','bitcoin-cash'), ('bitcoin-cash','ethereum'),
+        # BNB ↔ other majors
+        ('bnb','monero'), ('monero','bnb'),
+        ('bnb','solana'), ('solana','bnb'),
+        ('bnb','litecoin'), ('litecoin','bnb'),
+        ('bnb','ripple'), ('ripple','bnb'),
+        ('bnb','cardano'), ('cardano','bnb'),
+        # SOL ↔ other majors  
+        ('solana','tether-erc20'), ('tether-erc20','solana'),
+        ('solana','litecoin'), ('litecoin','solana'),
+        ('solana','ripple'), ('ripple','solana'),
+        # Stablecoin pairs
+        ('tether-erc20','usd-coin-erc20'),
     ]
 
     for from_slug, to_slug in pairs:
@@ -129,7 +157,7 @@ def fetch_bestchange():
                 print(f'  -- {from_slug}->{to_slug}: no offers')
         except Exception as e:
             print(f'  XX {from_slug}->{to_slug}: {e}')
-        time.sleep(0.5)
+        time.sleep(1.0)
 
     return results
 
