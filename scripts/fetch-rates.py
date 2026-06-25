@@ -102,6 +102,8 @@ def fetch_bestchange():
         ('solana','ripple'), ('ripple','solana'),
         # Stablecoin pairs
         ('tether-erc20','usd-coin-erc20'),
+        # Extra: requested by user
+        ('bnb','monero'), ('monero','bnb'),
     ]
 
     for from_slug, to_slug in pairs:
@@ -157,7 +159,7 @@ def fetch_bestchange():
                 print(f'  -- {from_slug}->{to_slug}: no offers')
         except Exception as e:
             print(f'  XX {from_slug}->{to_slug}: {e}')
-        time.sleep(1.0)
+        time.sleep(0.6)
 
     return results
 
