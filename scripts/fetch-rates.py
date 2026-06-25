@@ -51,6 +51,8 @@ def fetch_bestchange():
     results = {}
 
     pairs = [
+        # ── Requested pairs (fetched first, before rate limit) ──
+        ('bnb','monero'), ('monero','bnb'),
         # BTC ↔ everyone
         ('bitcoin','ethereum'), ('ethereum','bitcoin'),
         ('bitcoin','tether-erc20'), ('tether-erc20','bitcoin'),
@@ -102,8 +104,6 @@ def fetch_bestchange():
         ('solana','ripple'), ('ripple','solana'),
         # Stablecoin pairs
         ('tether-erc20','usd-coin-erc20'),
-        # Extra: requested by user
-        ('bnb','monero'), ('monero','bnb'),
     ]
 
     for from_slug, to_slug in pairs:
