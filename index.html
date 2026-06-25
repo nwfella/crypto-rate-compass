@@ -178,39 +178,52 @@
   .token-tile.dest-selected { border-color: var(--accent2); background: #0a1e3a; }
   .token-tile.disabled { opacity: 0.3; pointer-events: none; cursor: default; }
   .token-tile .icon-wrap {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
   }
   .token-tile .icon-wrap img {
     width: 100%;
     height: 100%;
+    border-radius: 50%;
     object-fit: cover;
+  }
+  .token-tile .icon-wrap .icon-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .token-tile .icon-wrap .chain-badge {
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    font-size: 6.5px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text2);
+    border: 1.5px solid var(--surface);
+    line-height: 1.3;
+    white-space: nowrap;
   }
   .token-tile .symbol {
     font-size: 11px;
     font-weight: 600;
     line-height: 1.2;
   }
-  .token-tile .chain-badge {
-    font-size: 7px;
-    padding: 1px 4px;
-    border-radius: 4px;
-    background: var(--border);
-    color: var(--text2);
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    line-height: 1.4;
-  }
-  .token-tile .chain-badge.hidden { display: none; }
 
   .results { display: none; margin-top: 20px; }
   .results.visible { display: block; }
@@ -541,7 +554,7 @@ function colorFor(sym) {
 // ============================================================
 // STATE
 // ============================================================
-const state = { sourceToken: null, destToken: null, amount: 1, loading: false, skipNextUpdate: false };
+const state = { sourceToken: null, destToken: null, amount: 1, loading: false };
 
 // ============================================================
 // API FETCHERS
@@ -565,10 +578,14 @@ function renderGrid(side) {
                 onclick="${disabled?'':`pick('${side}','${t.cgId}','${t.symbol}','${t.name.replace(/'/g,"\\'")}','${t.ff}','${t.cn}','${t.bc}','${t.chain||''}')`}"
                 title="${t.name}">
         <div class="icon-wrap" style="background:${colorFor(t.symbol)}">
-          <span>${t.symbol.startsWith('E')?'⟠':t.symbol.startsWith('B')?'₿':t.symbol.slice(0,2)}</span>
+          <img src="https://cryptoicons.org/api/icon/${t.symbol.toLowerCase()}/32"
+               alt="${t.symbol}"
+               loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <span class="icon-fallback" style="display:none">${t.symbol.slice(0,2)}</span>
+          ${t.chain ? `<span class="chain-badge">${t.chain}</span>` : ''}
         </div>
         <span class="symbol">${t.symbol}</span>
-        <span class="chain-badge ${t.chain?'':'hidden'}">${t.chain||''}</span>
       </div>`;
   }).join('');
 }
@@ -601,189 +618,191 @@ function swapTokens() {
 function filterTokens(side) { renderGrid(side); }
 
 // ============================================================
-// API FETCHERS
-// ============================================================
-async function getCG() {
-  const ids = [...new Set(TOKENS.map(t=>t.cgId))].join(',');
-  const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`, { signal: AbortSignal.timeout(10000) });
-  if (!r.ok) throw new Error(`CoinGecko HTTP ${r.status}`);
-  return await r.json();
-}
-
-// Fetch pre-cached FixedFloat rates from static JSON (via GitHub Actions)
-async function getFF() {
-  const r = await fetch('data/ff-rates.json?' + Date.now(), { signal: AbortSignal.timeout(8000) });
-  if (!r.ok) throw new Error(`FF data HTTP ${r.status}`);
-  return await r.json();
-}
-
-// Fetch pre-cached BestChange rates from static JSON
-async function getBC(fromSlug, toSlug) {
-  const key = fromSlug + '_' + toSlug;
-  try {
-    const r = await fetch('data/bc-rates.json?' + Date.now(), { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error(`BC data HTTP ${r.status}`);
-    const data = await r.json();
-    const entry = data[key];
-    if (entry) {
-      return { rate: entry.rate, exchanger: entry.exchanger };
-    }
-    return { rate: null, exchanger: null };
-  } catch (e) {
-    // Fallback: dummy data to show the feature works
-    return { rate: null, exchanger: null };
-  }
-}
-
-async function getCN(fromTicker, toTicker) {
-  // Try the exchange-amount endpoint (free, no key needed for some pairs)
-  const endpoints = [
-    `https://changenow.io/api/v1/exchange-amount/${fromTicker}_${toTicker}?amount=1`,
-    `https://changenow.io/api/v1/exchange-amount/${fromTicker}_${toTicker}`,
-  ];
-  for (const url of endpoints) {
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
-      if (r.ok) {
-        const txt = await r.text();
-        if (txt.trim()) {
-          const j = JSON.parse(txt);
-          if (j && j.estimatedAmount) return j;
-        }
-      }
-    } catch(_) {}
-  }
-  // Fallback: try min-amount just to confirm the pair exists
-  try {
-    const r = await fetch(
-      `https://changenow.io/api/v1/min-amount/${fromTicker}_${toTicker}`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (r.ok) {
-      const txt = await r.text();
-      const j = JSON.parse(txt);
-      if (j && j.minAmount) return { minAmount: j.minAmount };
-    }
-  } catch(_) {}
-  return null;
-}
-
-// ============================================================
 // MAIN
 // ============================================================
 async function fetchAllRates() {
   if (!state.sourceToken || !state.destToken || state.loading) return;
   state.loading = true;
 
-  // Global timeout: if we don't finish in 30s, release the loading state
-  let done = false;
-  setTimeout(() => { if (!done) { done = true; state.loading = false; document.getElementById('loadingArea').innerHTML = ''; } }, 28000);
+  // Safety timeout: release loading state after 18s
+  let timeout = setTimeout(() => { state.loading = false; document.getElementById('loadingArea').innerHTML = ''; }, 18000);
 
   const src = state.sourceToken, dst = state.destToken;
   const amt = parseFloat(document.getElementById('amountInput').value) || 1;
   state.amount = amt;
 
   const loadingDiv = document.getElementById('loadingArea');
-  loadingDiv.innerHTML = `<div class="loading-state"><div class="spinner"></div>Fetching rates from all sources...</div>`;
+  loadingDiv.innerHTML =
+    '<div class="loading-state"><div class="spinner"></div>Pulling rates from all sources...</div>';
   document.getElementById('refreshBtn').classList.remove('visible');
 
-  const srcLabel = `${src.symbol}${src.chain?' ('+src.chain+')':''}`;
-  const dstLabel = `${dst.symbol}${dst.chain?' ('+dst.chain+')':''}`;
+  const srcLabel = `${src.symbol}${src.chain ? ' (' + src.chain + ')' : ''}`;
+  const dstLabel = `${dst.symbol}${dst.chain ? ' (' + dst.chain + ')' : ''}`;
   document.getElementById('pairFrom').textContent = `${amt} ${srcLabel}`;
   document.getElementById('pairTo').textContent = dstLabel;
 
-  const results = [];
-  let marketRate = null, marketSrcPrice = null, marketDstPrice = null;
+  const cards = [];
 
-  try {
-    // CoinGecko — market rate
-    const cgData = await getCG();
+  // Helper to add a result card
+  function addCard(source, icon, bg, rate, detail, nodata) {
+    const total = amt * rate;
+    cards.push({ source, icon, bg, rate: nodata ? null : rate, total: nodata ? null : total, detail: nodata ? detail || 'unavailable' : (detail || ''), nodata });
+    return rate;
+  }
+
+  // ── Fire ALL sources in parallel ──
+  const [cgData, ffData, bcData, cnData] = await Promise.all([
+    // 1. CoinGecko (market)
+    (async () => {
+      try {
+        return await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' +
+          [...new Set(TOKENS.map(t => t.cgId))].join(',') + '&vs_currencies=usd',
+          { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null);
+      } catch (e) { return null; }
+    })(),
+
+    // 2. FixedFloat (static JSON)
+    (async () => {
+      try {
+        const r = await fetch('data/ff-rates.json?' + Date.now(), { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch (e) { return null; }
+    })(),
+
+    // 3. BestChange (static JSON)
+    (async () => {
+      try {
+        const r = await fetch('data/bc-rates.json?' + Date.now(), { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch (e) { return null; }
+    })(),
+
+    // 4. ChangeNOW (live, fast timeout)
+    (async () => {
+      try {
+        const r = await fetch(
+          `https://changenow.io/api/v1/exchange-amount/${src.cn}_${dst.cn}?amount=1`,
+          { signal: AbortSignal.timeout(4000) }
+        );
+        if (r.ok) {
+          const txt = await r.text();
+          if (txt.trim()) return JSON.parse(txt);
+        }
+      } catch (e) { }
+      try {
+        const r = await fetch(
+          `https://changenow.io/api/v1/min-amount/${src.cn}_${dst.cn}`,
+          { signal: AbortSignal.timeout(3000) }
+        );
+        if (r.ok) {
+          const txt = await r.text();
+          const j = JSON.parse(txt);
+          if (j && j.minAmount) return { minAmount: j.minAmount };
+        }
+      } catch (e) { }
+      return null;
+    })(),
+  ]);
+
+  // ── Process results ──
+  let marketRate = null;
+  let marketSrcPrice = null;
+  let marketDstPrice = null;
+
+  // CoinGecko
+  if (cgData) {
     marketSrcPrice = cgData[src.cgId]?.usd;
     marketDstPrice = cgData[dst.cgId]?.usd;
     if (marketSrcPrice && marketDstPrice) {
       marketRate = marketSrcPrice / marketDstPrice;
       document.getElementById('marketRate').textContent =
-        `1 ${src.symbol} = ${marketRate.toFixed(6)} ${dst.symbol}  ($${marketSrcPrice.toFixed(marketSrcPrice>1?2:6)} → $${marketDstPrice.toFixed(marketDstPrice>1?6:8)})`;
+        `1 ${src.symbol} = ${marketRate.toFixed(6)} ${dst.symbol}  ($${marketSrcPrice.toFixed(marketSrcPrice > 1 ? 2 : 6)} → $${marketDstPrice.toFixed(marketDstPrice > 1 ? 6 : 8)})`;
     } else {
       document.getElementById('marketRate').textContent = 'Price data unavailable';
     }
-
-    let bestSpread = Infinity, bestSource = null, bestTotal = null;
-
-    function addCard(source, icon, bg, rate, detail, nodata) {
-      const total = amt * rate;
-      const spread = (nodata || !marketRate || rate===0) ? null : (rate - marketRate) / marketRate * 100;
-      const isBest = !nodata && spread!==null && spread < bestSpread && spread < 0;
-      if (isBest) { bestSpread = spread; bestSource = source; bestTotal = total; }
-
-      results.push(`<div class="rate-card ${isBest?'best':''} ${nodata?'nodata':''}">
-        <div class="src-icon" style="background:${bg}">${icon}</div>
-        <div class="name-col">
-          <div class="name">${source}</div>
-          ${nodata?`<div class="status">${detail||'unavailable'}</div>`:''}
-        </div>
-        <div class="rate-col">
-          <div class="value">${nodata?'—':total.toFixed(6)+' '+dst.symbol}</div>
-          ${nodata?'':`<div class="perp">1 ${src.symbol} = ${rate.toFixed(6)} ${dst.symbol}</div>`}
-        </div>
-        ${nodata?'':`<div class="detail-col">${detail||''}</div>`}
-        <div class="spread-col ${spread===null?'neutral':spread<0?'good':'bad'}">
-          ${spread===null?'—':(spread<0?'':'+')+spread.toFixed(2)+'%'}
-        </div>
-        ${isBest?'<span class="badge-best">Best</span>':''}
-      </div>`);
-    }
-
-    // 1. ChangeNOW
-    try {
-      const cn = await getCN(src.cn, dst.cn);
-      if (cn && cn.estimatedAmount) {
-        addCard('ChangeNOW', 'CN', '#0ea5e9', parseFloat(cn.estimatedAmount)/amt, '');
-      } else {
-        addCard('ChangeNOW', 'CN', '#0ea5e9', 0, 'Needs API key', true);
-      }
-    } catch(e) { addCard('ChangeNOW', 'CN', '#0ea5e9', 0, e.message, true); }
-
-    // 2. FixedFloat
-    try {
-      const ff = await getFF();
-      const key = src.ff+'_'+dst.ff;
-      const d = ff[key];
-      if (d) {
-        let det = `Reserve: ${fmt(d.reserve)} ${src.symbol}`;
-        if (d.min>0) det += ` · Min: ${d.min}`;
-        if (d.max>0) det += ` · Max: ${d.max}`;
-        addCard('FixedFloat', 'FF', '#6366f1', d.rate, det);
-      } else {
-        addCard('FixedFloat', 'FF', '#6366f1', 0, 'Pair not listed', true);
-      }
-    } catch(e) { addCard('FixedFloat', 'FF', '#6366f1', 0, e.message, true); }
-
-    // 3. BestChange
-    try {
-      const bc = await getBC(src.bc, dst.bc);
-      if (bc.rate) {
-        addCard('BestChange', 'BC', '#f59e0b', bc.rate, bc.exchanger ? `via ${bc.exchanger}` : '');
-      } else {
-        addCard('BestChange', 'BC', '#f59e0b', 0, 'No offers', true);
-      }
-    } catch(e) { addCard('BestChange', 'BC', '#f59e0b', 0, e.message, true); }
-
-  } catch(e) {
-    results.push(`<div class="error-state">⚠️ ${e.message}</div>`);
-    done = true;
+  } else {
+    document.getElementById('marketRate').textContent = 'Price data unavailable';
   }
 
-  document.getElementById('ratesContainer').innerHTML = results.join('');
+  // FixedFloat
+  if (ffData) {
+    const key = src.ff + '_' + dst.ff;
+    const entry = ffData[key];
+    if (entry) {
+      let det = `Reserve: ${fmt(entry.reserve)} ${src.symbol}`;
+      if (entry.min > 0) det += ` · Min: ${entry.min}`;
+      if (entry.max > 0) det += ` · Max: ${entry.max}`;
+      addCard('FixedFloat', 'FF', '#6366f1', entry.rate, det);
+    } else {
+      addCard('FixedFloat', 'FF', '#6366f1', 0, 'Pair not listed', true);
+    }
+  } else {
+    addCard('FixedFloat', 'FF', '#6366f1', 0, 'Data unavailable', true);
+  }
+
+  // BestChange
+  if (bcData) {
+    const key = src.bc + '_' + dst.bc;
+    const entry = bcData[key];
+    if (entry && entry.rate) {
+      addCard('BestChange', 'BC', '#f59e0b', entry.rate, entry.exchanger ? `via ${entry.exchanger}` : '');
+    } else {
+      addCard('BestChange', 'BC', '#f59e0b', 0, 'No offers for this pair', true);
+    }
+  } else {
+    addCard('BestChange', 'BC', '#f59e0b', 0, 'Data unavailable', true);
+  }
+
+  // ChangeNOW
+  if (cnData && cnData.estimatedAmount) {
+    const cnRate = parseFloat(cnData.estimatedAmount);
+    addCard('ChangeNOW', 'CN', '#0ea5e9', cnRate, '');
+  } else if (cnData && cnData.minAmount) {
+    addCard('ChangeNOW', 'CN', '#0ea5e9', 0, 'Rate needs API key', true);
+  } else {
+    addCard('ChangeNOW', 'CN', '#0ea5e9', 0, 'No rate available', true);
+  }
+
+  // ── Render results ──
+  let bestSpread = Infinity, bestSource = null, bestTotal = null;
+
+  const html = cards.map(c => {
+    const spread = (c.rate && marketRate) ? (c.rate - marketRate) / marketRate * 100 : null;
+    const isBest = !c.nodata && spread !== null && spread < bestSpread && spread < 0;
+    if (isBest) { bestSpread = spread; bestSource = c.source; bestTotal = amt * c.rate; }
+
+    return `<div class="rate-card ${isBest ? 'best' : ''} ${c.nodata ? 'nodata' : ''}">
+      <div class="src-icon" style="background:${c.bg}">${c.icon}</div>
+      <div class="name-col">
+        <div class="name">${c.source}</div>
+        ${c.nodata ? '<div class="status">' + c.detail + '</div>' : ''}
+      </div>
+      <div class="rate-col">
+        <div class="value">${c.nodata ? '—' : (amt * c.rate).toFixed(6) + ' ' + dst.symbol}</div>
+        ${c.nodata ? '' : '<div class="perp">1 ' + src.symbol + ' = ' + c.rate.toFixed(6) + ' ' + dst.symbol + '</div>'}
+      </div>
+      ${c.nodata ? '' : '<div class="detail-col">' + c.detail + '</div>'}
+      <div class="spread-col ' + (spread === null ? 'neutral' : spread < 0 ? 'good' : 'bad') + '">
+        ${spread === null ? '—' : (spread < 0 ? '' : '+') + spread.toFixed(2) + '%'}
+      </div>
+      ${isBest ? '<span class="badge-best">Best</span>' : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('ratesContainer').innerHTML = html;
 
   // Best overall
   const be = document.getElementById('bestOverall');
-  if (bestSource && bestTotal!==null && bestSpread < 0) {
+  if (bestSource && bestTotal !== null && bestSpread < 0) {
     be.style.display = 'block';
-    be.innerHTML = `🏆 <strong>${bestSource}</strong> wins: get <strong>${bestTotal.toFixed(6)} ${dstLabel}</strong> — that's <strong>${Math.abs(bestSpread).toFixed(2)}% better</strong> than market for ${amt} ${srcLabel}`;
-  } else if (bestSource && bestTotal!==null && bestSpread < Infinity) {
+    be.innerHTML =
+      `🏆 <strong>${bestSource}</strong> wins: get <strong>${bestTotal.toFixed(6)} ${dstLabel}</strong> — that's <strong>${Math.abs(bestSpread).toFixed(2)}% better</strong> than market for ${amt} ${srcLabel}`;
+  } else if (bestSource && bestTotal !== null && bestSpread < Infinity) {
     be.style.display = 'block';
-    be.innerHTML = `📊 <strong>${bestSource}</strong> has the best available rate: <strong>${bestTotal.toFixed(6)} ${dstLabel}</strong> (${bestSpread.toFixed(2)}% above market)`;
+    be.innerHTML =
+      `📊 <strong>${bestSource}</strong> has the best available rate: <strong>${bestTotal.toFixed(6)} ${dstLabel}</strong> (${bestSpread.toFixed(2)}% above market)`;
   } else {
     be.style.display = 'none';
   }
@@ -792,7 +811,7 @@ async function fetchAllRates() {
   document.getElementById('hint').style.display = 'none';
   document.getElementById('refreshBtn').classList.add('visible');
   loadingDiv.innerHTML = '';
-  done = true;
+  clearTimeout(timeout);
   state.loading = false;
 }
 
