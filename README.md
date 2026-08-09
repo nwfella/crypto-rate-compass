@@ -4,6 +4,8 @@ Compare crypto exchange rates across **FixedFloat** and **BestChange** in one pl
 
 Single-file, dark-themed dashboard backed by static JSON data. No API keys, no build step, no server — the page renders entirely client-side and works on any static host (GitHub Pages included).
 
+**Live page:** https://nwfella.github.io/crypto-rate-compass/
+
 ## Features
 
 - **Two sources, one view** — rates from FixedFloat (official rates feed) and BestChange (best live offer per pair)
