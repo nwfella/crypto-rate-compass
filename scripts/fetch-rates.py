@@ -163,6 +163,35 @@ def fetch_bestchange():
 
     return results
 
+# ── 3. Bake rates into index.html (survives IT envs that block XHR on github.io) ──
+def bake_rates_into_html(ff, bc):
+    """Replace the payload between RATES_DATA_START/END markers in index.html.
+
+    Keeps the page functional where fetch() of data/*.json is blocked (returns 204).
+    The markers persist so every run can re-bake; byte-level replacement preserves
+    the file's CRLF line endings.
+    """
+    index_path = os.path.join(os.path.dirname(__file__), '..', 'index.html')
+    with open(index_path, 'rb') as f:
+        html = f.read()
+    start_marker = b'/*__RATES_DATA_START__*/'
+    end_marker = b'/*__RATES_DATA_END__*/'
+    i = html.find(start_marker)
+    j = html.find(end_marker)
+    if i == -1 or j == -1 or j < i:
+        print('WARN: RATES_DATA markers not found in index.html — skipping bake')
+        return
+    def esc(obj):
+        # escape < as \u003c so no </script> can ever break out of the inline block
+        return json.dumps(obj, separators=(',', ':')).replace('<', '\\u003c')
+    EOL = chr(13) + chr(10)  # CRLF, matches index.html line endings
+    payload = (EOL + '  window.FF_RATES = ' + esc(ff) + ';' + EOL
+               + '  window.BC_RATES = ' + esc(bc) + ';' + EOL).encode('utf-8')
+    i_end = i + len(start_marker)
+    with open(index_path, 'wb') as f:
+        f.write(html[:i_end] + payload + html[j:])
+    print('Baked rates into index.html')
+
 # ── MAIN ──
 if __name__ == '__main__':
     print(f'=== Rate update {time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())} ===')
@@ -177,5 +206,7 @@ if __name__ == '__main__':
 
     with open(os.path.join(DATA_DIR, 'timestamp.json'), 'w') as f:
         json.dump({'updated': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, f)
+
+    bake_rates_into_html(ff, bc)
 
     print(f'\nDone. FF: {len(ff)} pairs, BC: {len(bc)} pairs')
